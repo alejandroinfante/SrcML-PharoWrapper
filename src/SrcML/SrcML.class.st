@@ -51,7 +51,10 @@ SrcML class >> extractJavaFromCode: aString [
 { #category : #modes }
 SrcML class >> primRun: argsStringOrCollection [
 	| args |
-	self assert: self binary exists.
+	"srcML should be installed from https://www.srcml.org
+	On OSX, you can download a .tar.gz from https://www.srcml.org/#download , copy the two libraries file and the executable in the same folder than the Pharo image.
+	"
+	self assert: [self binary exists] description: 'srcML is not installed'.
 	args := argsStringOrCollection.
 	args isString 
 		ifFalse: [ 
