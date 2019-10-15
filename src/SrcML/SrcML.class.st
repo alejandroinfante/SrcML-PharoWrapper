@@ -49,17 +49,29 @@ SrcML class >> extractJavaFromCode: aString [
 ]
 
 { #category : #modes }
-SrcML class >> primRun: argsStringOrCollection [
-	| args |
+SrcML class >> primRun: argsCollection [
+	| command cummulativeTime millisDelay |
 	self assert: self binary exists.
-	args := argsStringOrCollection.
-	args isString 
-		ifFalse: [ 
-			args := String streamContents: [ :str | 
-						args do: [ :arg | 
-								str << ' '.
-								str << arg asString. ] ] ].
-	^ LibC resultOfCommand: self binary pathString , args
+	cummulativeTime := 0.
+	millisDelay := 50.
+	command := OSSUnixSubprocess new.
+	command
+		command: self binary pathString;
+		arguments: argsCollection;
+		redirectStdout;
+		run;
+		waitForExitPollingEvery: (Delay forMilliseconds: millisDelay)
+		doing: [ 
+			command retrieveWhatIsAvailableOn: command stdoutStream andAddItTo: command retrievedStdout.
+			cummulativeTime := cummulativeTime + 1.
+			cummulativeTime * millisDelay > self timeout ifTrue: [ 
+				command stopWaiting.
+				command terminate. ]
+		].
+	command closeAndCleanStreams.
+	cummulativeTime * millisDelay > self timeout ifTrue: [ OSSTimeout signal ].
+	^ command retrievedStdout contents
+	"^ LibC resultOfCommand: self binary pathString , args"
 ]
 
 { #category : #modes }
@@ -67,6 +79,12 @@ SrcML class >> run: argsStringOrCollection [
 	^ self new
 		raw: (self primRun: argsStringOrCollection);
 		yourself
+]
+
+{ #category : #accessing }
+SrcML class >> timeout [
+	"Timeout in milliseconds"
+	^ 2000
 ]
 
 { #category : #accessing }
