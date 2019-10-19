@@ -84,7 +84,7 @@ SrcML class >> run: argsStringOrCollection [
 { #category : #accessing }
 SrcML class >> timeout [
 	"Timeout in milliseconds"
-	^ 2000
+	^ 20000
 ]
 
 { #category : #accessing }
