@@ -23,19 +23,25 @@ SrcML class >> binary: aFileReference [
 { #category : #'as yet unclassified' }
 SrcML class >> ensureTempFile: aBlock [
 	| file |
-	file := (99999999 atRandom asString , '.tmp') asFileReference.
-	self assert: file exists not.
-	^ [ aBlock value: file ] ensure: [ 
-		file deleteIfAbsent: [  ] ]
+	^ [
+		file := (9999999999999999 atRandom asString , '.tmp') asFileReference.
+		self assert: file exists not.
+		aBlock value: file ] ensure: [ 
+			file ifNotNil: [ file deleteIfAbsent: [  ] ] ]
 ]
 
 { #category : #'as yet unclassified' }
 SrcML class >> extractFromCode: aString language: lang [
-	^ self ensureTempFile: [ :inputFile | | stream |
-		stream := inputFile writeStream.
-		stream << aString.
-		stream close.
-		self run: {'-l'. lang. inputFile pathString } ]
+	| count result |
+	count := 1.
+	[ result notNil and: [ count < 5 ] ] whileFalse: [ 
+		count := count + 1.
+		[ result := self prim_run_remote: aString lang: lang ]
+			on: Error
+			do: [ :err | nil ]].
+	^ self new
+		raw: result;
+		yourself
 ]
 
 { #category : #'as yet unclassified' }
@@ -66,18 +72,38 @@ SrcML class >> primRun: argsCollection [
 			cummulativeTime := cummulativeTime + 1.
 			cummulativeTime * millisDelay > self timeout ifTrue: [ 
 				command stopWaiting.
-				command terminate. ]
+				command terminate.
+				command queryExitStatus ]
 		].
 	command closeAndCleanStreams.
 	cummulativeTime * millisDelay > self timeout ifTrue: [ OSSTimeout signal ].
 	^ command retrievedStdout contents
 	"^ LibC resultOfCommand: self binary pathString , args"
+	
+	"CONFIGURE STDIN! AND THEN MAKE PROCESSING PUT MANY METHODS IN THE SAME FILE"
+]
+
+{ #category : #'as yet unclassified' }
+SrcML class >> prim_run_remote: aString lang: lang [
+	^ RemoteCommand
+		binary: self binary
+		args:
+			{'-l'.
+			lang}
+		stdin: aString readStream
 ]
 
 { #category : #modes }
 SrcML class >> run: argsStringOrCollection [
 	^ self new
 		raw: (self primRun: argsStringOrCollection);
+		yourself
+]
+
+{ #category : #modes }
+SrcML class >> run: argsStringOrCollection src: sourceCode [
+	^ self new
+		raw: (self primRun: argsStringOrCollection src: sourceCode);
 		yourself
 ]
 
