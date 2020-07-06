@@ -33,14 +33,15 @@ SrcML class >> ensureTempFile: aBlock [
 { #category : #'as yet unclassified' }
 SrcML class >> extractFromCode: aString language: lang [
 	| count result |
-	count := 1.
+	"count := 1.
 	[ result notNil and: [ count < 5 ] ] whileFalse: [ 
 		count := count + 1.
 		[ result := self prim_run_remote: aString lang: lang ]
 			on: Error
-			do: [ :err | nil ]].
+			do: [ :err | nil ]]."
+		
 	^ self new
-		raw: result;
+		raw: (self prim_run_remote: aString lang: lang);
 		yourself
 ]
 
@@ -83,14 +84,49 @@ SrcML class >> primRun: argsCollection [
 	"CONFIGURE STDIN! AND THEN MAKE PROCESSING PUT MANY METHODS IN THE SAME FILE"
 ]
 
+{ #category : #modes }
+SrcML class >> primRunSimple: input args: argsCollection [
+	| command stdOutstream outStream inputThread outputThread |
+	self assert: self binary exists.
+	command := OSSUnixSubprocess new.
+	outStream := command systemAccessor makeNonBlockingPipe.
+	stdOutstream := (String new: 500) writeStream.
+	command
+		command: self binary pathString;
+		arguments: argsCollection;
+		redirectStdin;
+		redirectStdoutTo: outStream;
+		run.
+	[inputThread := [ |inputStream|
+		[ 
+			inputStream := input readStream.
+			[ inputStream atEnd ] whileFalse: [ 
+				command stdinStream nextPutAll: (inputStream next: 512) ].
+			command stdinStream close ] on: Error do: [ :e | ] ] fork.
+	outputThread := [ [ 
+			[ 
+				[ outStream atEnd ] whileFalse: [ stdOutstream nextPutAll: (outStream next: 2000) ].
+				(Delay forMilliseconds: 5) wait ] repeat ] on: Error do: [ :e | ] ] forkAt: 40.
+	Processor yield.
+	command waitForExitWithTimeout: 60 seconds. ] ensure: [ 
+		[inputThread terminate.
+		outputThread terminate.
+		stdOutstream nextPutAll: outStream upToEndOfFile.] ensure: [ command closeAndCleanStreams ] ].
+	^ stdOutstream contents
+	"^ LibC resultOfCommand: self binary pathString , args"
+	
+	"CONFIGURE STDIN! AND THEN MAKE PROCESSING PUT MANY METHODS IN THE SAME FILE"
+]
+
 { #category : #'as yet unclassified' }
 SrcML class >> prim_run_remote: aString lang: lang [
-	^ RemoteCommand
+	^ self primRunSimple: aString args: {'-l'. lang}
+	"^ RemoteCommand
 		binary: self binary
 		args:
 			{'-l'.
 			lang}
-		stdin: aString readStream
+		stdin: aString readStream"
 ]
 
 { #category : #modes }
